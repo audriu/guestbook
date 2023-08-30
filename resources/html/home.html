@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-  <div class="content">
+<input id="token" type="hidden" value="{{csrf-token}}" />
+<div class="content" id="content">
   {{docs|markdown}}
-  </div>
+</div>
+{% endblock %}
+{% block page-scripts %}
+{% script "/js/app.js" %}
 {% endblock %}

@@ -2,6 +2,7 @@
   (:require
    [guestbook.layout :as layout]
    [guestbook.db.core :as db]
+   [guestbook.validation :refer [validate-message]]
    [clojure.java.io :as io]
    [guestbook.middleware :as middleware]
    [ring.util.response]
@@ -9,42 +10,28 @@
    [struct.core :as st]))
 
 (defn home-page [request]
-  (layout/render request "home.html" {:docs (-> "docs/docs.md" io/resource slurp)}))
+  (layout/render
+   request "home.html"))
 
 (defn about-page [request]
   (layout/render request "about.html"))
 
 (defn messages-page [{:keys [flash] :as request}]
   (layout/render request "messages.html" (merge {:messages (db/get-messages)}
-                                                 (select-keys flash [:name :message :errors]))))
-
-(def message-schema
-  [[:name
-    st/required
-    st/string]
-   [:message
-    st/required
-    st/string
-    {:message "message must contain at least 10 characters"
-     :validate (fn [msg] (>= (count msg) 10))}]])
-
-(defn validate-message [params]
-  (let [errs (first (st/validate params message-schema))]
-    (prn "--------errs-----" errs)
-    errs))
-
-(defn save-message!-old [{:keys [params]}]
-  (prn "-------------" params)
-  (db/save-message! params)
-  (response/found "/messages"))
+                                                (select-keys flash [:name :message :errors]))))
 
 (defn save-message! [{:keys [params]}]
   (if-let [errors (validate-message params)]
-    (-> (response/found "/messages")
-        (assoc :flash (assoc params :errors errors)))
-    (do
+    (response/bad-request {:errors errors})
+    (try
       (db/save-message! params)
-      (response/found "/messages"))))
+      (response/ok {:status :ok})
+      (catch Exception _
+        (response/internal-server-error
+         {:errors {:server-error ["Failed to save message!"]}})))))
+
+(defn message-list [_]
+  (response/ok {:messages (vec (db/get-messages))}))
 
 (defn home-routes []
   [""
